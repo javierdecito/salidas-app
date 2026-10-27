@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gabinete · Salidas a la naturaleza</title>
+<link rel="icon" href="img/icon-192.png">
+<link rel="stylesheet" href="lib/leaflet.css">
+<link rel="stylesheet" href="gabinete.css">
+</head>
+<body>
+<header class="gtop">
+  <div><div class="kicker">Salidas a la naturaleza · Gabinete</div><h1>El caso de la ladera del Puñón</h1></div>
+  <div class="gbtns">
+    <button id="bXlsx" class="gb" disabled>⬇ Excel integrado</button>
+    <button id="bPptx" class="gb" disabled>⬇ Presentación de resultados</button>
+    <button id="bGeo" class="gb" disabled>⬇ Puntos (GeoJSON)</button>
+  </div>
+</header>
+
+<section id="carga" class="panel">
+  <h2>1 · Cargar las entregas</h2>
+  <p>Arrastrá acá los ZIP que exportó cada equipo desde la aplicación, o el ZIP único que da el aula virtual con <b>“Descargar todas las entregas”</b>. Se pueden sumar archivos en varias tandas. Nada sale de esta computadora: los datos se procesan en el navegador.</p>
+  <div id="drop" class="drop" tabindex="0">
+    <div class="dropin"><b>Soltá los archivos acá</b><br>o <label class="lnk">elegilos<input id="fin" type="file" accept=".zip" multiple hidden></label></div>
+  </div>
+  <div class="row"><button id="bDemo" class="gb ghost">Probar con datos de ejemplo</button><button id="bReset" class="gb ghost">Empezar de nuevo</button></div>
+  <div id="log" class="log"></div>
+</section>
+
+<nav id="tabs" class="gtabs hidden">
+  <button data-v="resumen" class="on">Resumen</button>
+  <button data-v="mapa">Mapa</button>
+  <button data-v="arboles">¿Los árboles se escapan?</button>
+  <button data-v="manchas">Manchas</button>
+  <button data-v="senderos">Senderos</button>
+  <button data-v="arroyo">Arroyo</button>
+  <button data-v="fauna">Fauna y presiones</button>
+  <button data-v="paisaje">Comentarios del paisaje</button>
+  <button data-v="fotos">Fotos</button>
+</nav>
+<main id="vista"></main>
+<footer class="gfoot">Página de gabinete de la aplicación de campo · Los resultados dependen de la calidad de los datos cargados: revisar siempre las tablas antes de sacar conclusiones.</footer>
+
+<script src="jszip.min.js"></script>
+<script src="lib/chart.umd.js"></script>
+<script src="lib/leaflet.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+<script src="lib/pptxgen.bundle.js"></script>
+<script src="gabinete.js"></script>
+</body>
+</html>

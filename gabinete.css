@@ -1,0 +1,55 @@
+:root{--dark:#1A4331;--mid:#2F9468;--mint:#56B58D;--fill:#D9F1DF;--cream:#F4F6F3;--text:#14261F;--muted:#5B6B62;--alert:#B3413A;--line:#CFE3D6}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--cream)}
+h1{font-family:Georgia,serif;font-size:1.35em;margin:0}
+h2{font-family:Georgia,serif;color:var(--dark);margin:.2em 0 .6em;font-size:1.25em}
+h3{color:var(--dark);margin:1em 0 .4em}
+.gtop{position:sticky;top:0;z-index:1000;background:var(--dark);color:#fff;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;flex-wrap:wrap}
+.kicker{font-size:.72em;letter-spacing:.12em;text-transform:uppercase;color:#BFE5CE}
+.gbtns{display:flex;gap:8px;flex-wrap:wrap}
+.gb{background:var(--mid);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-size:.95em;cursor:pointer}
+.gb:disabled{opacity:.45;cursor:default}
+.gtop .gb{background:#fff;color:var(--dark)}
+.gb.ghost{background:#fff;color:var(--dark);border:1px solid var(--mint)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px auto;max-width:1150px}
+.drop{border:3px dashed var(--mint);border-radius:14px;padding:34px;text-align:center;background:#F7FBF8;transition:.2s}
+.drop.over{background:var(--fill);border-color:var(--mid)}
+.lnk{color:var(--mid);text-decoration:underline;cursor:pointer}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.log{font-size:.88em;color:var(--muted);margin-top:10px;max-height:150px;overflow:auto}
+.log .ok{color:var(--mid)} .log .err{color:var(--alert)}
+.gtabs{display:flex;gap:4px;flex-wrap:wrap;max-width:1150px;margin:0 auto;padding:0 4px}
+.gtabs button{border:1px solid var(--line);background:#fff;color:var(--dark);padding:9px 13px;border-radius:10px 10px 0 0;cursor:pointer;font-size:.93em}
+.gtabs button.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+.hidden{display:none}
+main{max-width:1150px;margin:0 auto 30px;background:#fff;border:1px solid var(--line);border-radius:0 14px 14px 14px;padding:18px 20px;min-height:200px}
+main:empty{display:none}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0 16px}
+.kpi{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi b{display:block;font-size:1.9em;color:var(--dark);font-family:Georgia,serif}
+.kpi span{font-size:.85em;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:850px){.grid2{grid-template-columns:1fr}}
+.chartbox{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;height:340px;position:relative}
+table.t{border-collapse:collapse;width:100%;font-size:.86em;margin:6px 0 14px}
+table.t th{background:var(--dark);color:#fff;text-align:left;padding:6px 8px;font-weight:600;position:sticky;top:0}
+table.t td{border-bottom:1px solid var(--line);padding:5px 8px;vertical-align:top}
+.tw{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.lectura{background:#FFF9E0;border-left:5px solid #C9A227;border-radius:8px;padding:10px 14px;margin:10px 0 14px}
+.lectura b{color:#7A5E10}
+.aviso{background:#FBE9E6;border-left:5px solid var(--alert);border-radius:8px;padding:10px 14px;margin:10px 0}
+#map{height:560px;border-radius:12px;border:1px solid var(--line)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+.card h4{margin:0 0 6px;color:var(--dark)}
+.card p{margin:.3em 0;font-size:.92em}
+.chips span{display:inline-block;background:var(--fill);color:var(--dark);border-radius:999px;padding:2px 9px;margin:2px;font-size:.8em}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.gal figure{margin:0;background:var(--cream);border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.gal img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;cursor:zoom-in}
+.gal figcaption{font-size:.74em;padding:5px 7px;color:var(--muted);word-break:break-all}
+.gfoot{text-align:center;color:var(--muted);font-size:.8em;padding:10px 20px 30px}
+.leg{font-size:.85em;color:var(--muted)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 4px 0 10px;vertical-align:middle}
+dialog{border:0;border-radius:12px;padding:0;max-width:90vw}
+dialog img{max-width:90vw;max-height:85vh;display:block}

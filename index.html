@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1A4331">
+<title>Salidas a la naturaleza</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <div class="kicker">Salidas a la naturaleza</div>
+    <h1>Lago del Fuerte</h1>
+  </div>
+  <div class="top-right">
+    <span id="netState" class="pill" title="Estado de conexión">…</span>
+    <button id="sunBtn" class="pill btn-pill" aria-label="Modo sol">☀ Modo sol</button>
+  </div>
+</header>
+
+<div id="sessionBar" class="session"></div>
+
+<main id="view"></main>
+
+<nav class="tabs" role="tablist">
+  <button data-tab="inicio" class="tab active">🏠<span>Inicio</span></button>
+  <button data-tab="guia" class="tab">📖<span>Guía</span></button>
+  <button data-tab="relevar" class="tab">📝<span>Relevar</span></button>
+  <button data-tab="datos" class="tab">💾<span>Datos</span></button>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="jszip.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
