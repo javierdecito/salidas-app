@@ -1,7 +1,7 @@
 /* Salidas a la naturaleza · Lago del Fuerte — prototipo sin conexión
    Datos: IndexedDB del teléfono. Exportación: ZIP clasificado (CSV + GeoJSON + fotos por carpeta). */
 'use strict';
-const APP_VERSION = '0.4.3';
+const APP_VERSION = '0.4.5';
 
 // ---------- Contenido de la guía ----------
 const FORMAS = [
@@ -524,10 +524,14 @@ async function vDatos() {
       <p>El ZIP completo pesará unos <b>${(mbFotos + 0.1).toFixed(1)} MB</b>.</p>
       <button class="btn" id="dExp" ${regs.length ? '' : 'disabled'}>📦 Exportar completo (datos + fotos)</button>
       <button class="btn" id="dExpL" ${regs.length ? '' : 'disabled'}>📄 Exportar solo datos (liviano, sin fotos)</button>
-      <p class="muted">El ZIP completo trae las tablas para Excel, los puntos para QGIS o Google Earth y las fotos ordenadas por parada y tipo. ${mbFotos > 40 ? '<b>Pesa más de 40 MB: subí al aula virtual el ZIP de solo datos y el completo a la carpeta de respaldo que indique la cátedra.</b>' : 'Si el aula virtual no acepta el completo por tamaño, subí el de solo datos y el completo a la carpeta de respaldo.'}</p></div>
+      <p class="muted">El ZIP completo trae las tablas para Excel, los puntos para Google Earth y las fotos ordenadas por parada y tipo. ${mbFotos > 40 ? '<b>Pesa más de 40 MB: subí al aula virtual el ZIP de solo datos y el completo a la carpeta de respaldo que indique la cátedra.</b>' : 'Si el aula virtual no acepta el completo por tamaño, subí el de solo datos y el completo a la carpeta de respaldo.'}</p></div>
+    ${regs.length ? `<div class="card"><b>¿Eran datos de prueba?</b><p class="muted">Antes de la salida, borrá lo que cargaste para practicar, así no se mezcla con los datos del campo. Exportá primero si querés guardar algo.</p><p><b>Solo borra lo cargado en esta aplicación</b> (sus registros y las fotos guardadas en ella). No toca la galería, tus fotos, tus archivos ni nada más del celular.</p><button class="btn danger" id="dBorrarTodo">🗑 Borrar los datos de esta aplicación</button></div>` : ''}
     ${regs.map(r => `<div class="rec"><b>${esc(etiqueta(r))}</b><br>
       <small>Parada ${esc(r.parada)} · ${new Date(r.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · ${r.fotos.length} foto(s) · ${r.lat ? 'GPS ✓' : 'sin GPS'}</small>
       <br><button class="btn small danger" data-del="${r.id}">Borrar</button></div>`).join('')}`;
+  if (regs.length) $('#dBorrarTodo').onclick = async () => { const b = $('#dBorrarTodo');
+    if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = `Se borrarán ${regs.length} registros y ${nFotos} fotos de la aplicación (el resto del celular no se toca). Tocá de nuevo para confirmar`; return; }
+    for (const r of regs) { for (const f of (r.fotos || [])) await delFoto(f); await delReg(r.id); } toast('Datos de la aplicación borrados'); vDatos(); };
   if (regs.length) { $('#dExp').onclick = () => exportar(true); $('#dExpL').onclick = () => exportar(false); }
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = 'Tocá de nuevo para confirmar'; return; }
@@ -538,6 +542,27 @@ async function vDatos() {
 const csvCell = (v) => { const s = String(v ?? ''); return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 function toCSV(rows, cols) { return '﻿' + [cols.join(';')].concat(rows.map(r => cols.map(c => csvCell(c === 'fotos' ? (r._fotosNombres || []).join(' | ') : r[c])).join(';'))).join('\r\n'); }
 
+// ---------- KML para Google Earth ----------
+const KML_CAPAS = { comentario: ['Comentarios del paisaje', 'ff00c8ff'], mancha: ['Manchas (cuadrantes)', 'ff3c9c2f'], transecto: ['Transectos de renovales', 'ff1f5fb3'], sendero: ['Senderos', 'ff3a41b3'], rapido: ['Registros rápidos (fauna, presiones, otros)', 'ffb8904a'] };
+const xesc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function kmlDe(filas, titulo) {
+  const out = [`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xesc(titulo)}</name>`];
+  for (const [k, [n, col]] of Object.entries(KML_CAPAS)) out.push(`<Style id="s_${k}"><IconStyle><color>${col}</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle></Style>`);
+  for (const [k, [n]] of Object.entries(KML_CAPAS)) {
+    const fs = (filas[k] || []).filter(r => r.lat !== '' && r.lon !== '' && r.lat != null && r.lon != null && !isNaN(parseFloat(String(r.lat).replace(',', '.'))));
+    if (!fs.length) continue;
+    out.push(`<Folder><name>${xesc(n)} (${fs.length})</name>`);
+    for (const r of fs) {
+      const la = parseFloat(String(r.lat).replace(',', '.')), lo = parseFloat(String(r.lon).replace(',', '.'));
+      const nom = [r.parada, r.grupo, r.fisonomia || r.especie || r.que_es || r.sector || r.concluye_tipo || ''].filter(Boolean).join(' · ');
+      const filasT = Object.entries(r).filter(([c, v]) => v !== '' && v != null && typeof v !== 'object' && !['lat', 'lon', 'id', 'fecha_hora', '_fotosNombres'].includes(c)).map(([c, v]) => `<tr><td><b>${xesc(c.replace(/_/g, ' '))}</b></td><td>${xesc(v)}</td></tr>`).join('');
+      out.push(`<Placemark><name>${xesc(nom)}</name><styleUrl>#s_${k}</styleUrl><description><![CDATA[<table>${filasT}</table>]]></description><Point><coordinates>${lo},${la},0</coordinates></Point></Placemark>`);
+    }
+    out.push('</Folder>');
+  }
+  out.push('</Document></kml>');
+  return out.join('\n');
+}
 async function exportar(conFotos = true) {
   const btn = $(conFotos ? '#dExp' : '#dExpL'), txt0 = btn.textContent; btn.disabled = true; btn.textContent = 'Armando el ZIP…';
   try {
@@ -565,7 +590,9 @@ async function exportar(conFotos = true) {
     const gj = { type: 'FeatureCollection', features: regs.filter(r => r.lat !== '' && r.lon !== '').map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
       properties: Object.fromEntries(Object.entries(r).filter(([k]) => !['fotos', '_fotosNombres', '_cruces'].includes(k)).concat([['fotos', (r._fotosNombres || []).join(' | ')]])) })) };
     zip.file('datos/puntos.geojson', JSON.stringify(gj, null, 1));
-    zip.file('LEEME.txt', `Salidas a la naturaleza · Lago del Fuerte\r\nGrupo: ${sesion.grupo}\r\nExportado: ${new Date().toLocaleString('es-AR')}\r\nApp versión ${APP_VERSION}\r\n\r\nTablas para Excel (separador ;):\r\ndatos/comentario_paisaje.csv    -> comentarios del paisaje (observo / deduzco / concluyo)\r\ndatos/manchas_planilla_A.csv    -> lectura de manchas con cuadrante\r\ndatos/transectos_planilla_B.csv -> transectos de renovales por tramo\r\ndatos/senderos_lineas.csv       -> líneas de conteo de senderos (resumen)\r\ndatos/senderos_cruces.csv       -> cada sendero medido (ancho y profundidad)\r\ndatos/registros_rapidos.csv     -> registros rápidos con foto\r\ndatos/puntos.geojson            -> todos los puntos con GPS (QGIS / Google Earth)\r\n${conFotos ? 'fotos/parada_N/tipo/            -> fotos clasificadas; el nombre indica parada, grupo, tipo, qué es y n.º' : 'ESTE ZIP ES SOLO DE DATOS: las fotos están en el ZIP completo (los nombres figuran en la columna fotos).'}\r\n`);
+    const porTipo = { comentario: de('comentario'), mancha: de('mancha'), transecto: de('transecto'), sendero: de('sendero'), rapido: libres };
+    zip.file('datos/puntos_google_earth.kml', kmlDe(porTipo, 'Salida Lago del Fuerte · equipo ' + sesion.grupo));
+    zip.file('LEEME.txt', `Salidas a la naturaleza · Lago del Fuerte\r\nGrupo: ${sesion.grupo}\r\nExportado: ${new Date().toLocaleString('es-AR')}\r\nApp versión ${APP_VERSION}\r\n\r\nTablas para Excel (separador ;):\r\ndatos/comentario_paisaje.csv    -> comentarios del paisaje (observo / deduzco / concluyo)\r\ndatos/manchas_planilla_A.csv    -> lectura de manchas con cuadrante\r\ndatos/transectos_planilla_B.csv -> transectos de renovales por tramo\r\ndatos/senderos_lineas.csv       -> líneas de conteo de senderos (resumen)\r\ndatos/senderos_cruces.csv       -> cada sendero medido (ancho y profundidad)\r\ndatos/registros_rapidos.csv     -> registros rápidos con foto\r\ndatos/puntos_google_earth.kml   -> todos los puntos con GPS para abrir en Google Earth (doble clic)\r\ndatos/puntos.geojson            -> los mismos puntos para QGIS u otro SIG\r\n${conFotos ? 'fotos/parada_N/tipo/            -> fotos clasificadas; el nombre indica parada, grupo, tipo, qué es y n.º' : 'ESTE ZIP ES SOLO DE DATOS: las fotos están en el ZIP completo (los nombres figuran en la columna fotos).'}\r\n`);
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const nombre = `salida_lago_del_fuerte_G${slug(sesion.grupo)}_${new Date().toISOString().slice(0, 10)}${conFotos ? '' : '_solo_datos'}.zip`;
     const file = new File([blob], nombre, { type: 'application/zip' });

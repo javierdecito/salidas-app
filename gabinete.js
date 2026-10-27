@@ -94,7 +94,7 @@ let vista = 'resumen';
 function refrescar() {
   const hay = D.comentario.length + D.mancha.length + D.transecto.length + D.sendero.length + D.rapido.length > 0;
   $('#tabs').classList.toggle('hidden', !hay);
-  ['#bXlsx', '#bPptx', '#bGeo'].forEach(b => $(b).disabled = !hay);
+  ['#bXlsx', '#bPptx', '#bKml', '#bGeo'].forEach(b => $(b).disabled = !hay);
   if (hay) render(); else $('#vista').innerHTML = '';
 }
 function render() {
@@ -282,6 +282,31 @@ function exportarGeo() {
   const blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features: feats }, null, 1)], { type: 'application/geo+json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'salida_ladera_punon_puntos.geojson'; a.click();
 }
+// ---------- KML para Google Earth ----------
+const KML_CAPAS = { comentario: ['Comentarios del paisaje', 'ff00c8ff'], mancha: ['Manchas (cuadrantes)', 'ff3c9c2f'], transecto: ['Transectos de renovales', 'ff1f5fb3'], sendero: ['Senderos', 'ff3a41b3'], rapido: ['Registros rápidos (fauna, presiones, otros)', 'ffb8904a'] };
+const xesc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function kmlDe(filas, titulo) {
+  const out = [`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xesc(titulo)}</name>`];
+  for (const [k, [n, col]] of Object.entries(KML_CAPAS)) out.push(`<Style id="s_${k}"><IconStyle><color>${col}</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle></Style>`);
+  for (const [k, [n]] of Object.entries(KML_CAPAS)) {
+    const fs = (filas[k] || []).filter(r => r.lat !== '' && r.lon !== '' && r.lat != null && r.lon != null && !isNaN(parseFloat(String(r.lat).replace(',', '.'))));
+    if (!fs.length) continue;
+    out.push(`<Folder><name>${xesc(n)} (${fs.length})</name>`);
+    for (const r of fs) {
+      const la = parseFloat(String(r.lat).replace(',', '.')), lo = parseFloat(String(r.lon).replace(',', '.'));
+      const nom = [r.parada, r.grupo, r.fisonomia || r.especie || r.que_es || r.sector || r.concluye_tipo || ''].filter(Boolean).join(' · ');
+      const filasT = Object.entries(r).filter(([c, v]) => v !== '' && v != null && typeof v !== 'object' && !['lat', 'lon', 'id', 'fecha_hora', '_fotosNombres'].includes(c)).map(([c, v]) => `<tr><td><b>${xesc(c.replace(/_/g, ' '))}</b></td><td>${xesc(v)}</td></tr>`).join('');
+      out.push(`<Placemark><name>${xesc(nom)}</name><styleUrl>#s_${k}</styleUrl><description><![CDATA[<table>${filasT}</table>]]></description><Point><coordinates>${lo},${la},0</coordinates></Point></Placemark>`);
+    }
+    out.push('</Folder>');
+  }
+  out.push('</Document></kml>');
+  return out.join('\n');
+}
+function exportarKml() {
+  const blob = new Blob([kmlDe(D, 'Salida ladera del Puñón · puntos de todos los equipos')], { type: 'application/vnd.google-earth.kml+xml' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'salida_ladera_punon_puntos_google_earth.kml'; a.click();
+}
 async function blobToDataURL(blob) { return new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); }); }
 async function exportarPptx() {
   const btn = $('#bPptx'); btn.disabled = true; btn.textContent = 'Armando…';
@@ -390,4 +415,4 @@ $('#bDemo').onclick = async () => {
 };
 $('#bReset').onclick = () => { D.fotos.forEach(f => URL.revokeObjectURL(f.url)); D = vacio(); $('#log').innerHTML = ''; refrescar(); };
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { vista = b.dataset.v; render(); });
-$('#bXlsx').onclick = exportarXlsx; $('#bGeo').onclick = exportarGeo; $('#bPptx').onclick = exportarPptx;
+$('#bXlsx').onclick = exportarXlsx; $('#bGeo').onclick = exportarGeo; $('#bKml').onclick = exportarKml; $('#bPptx').onclick = exportarPptx;

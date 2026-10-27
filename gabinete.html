@@ -14,13 +14,14 @@
   <div class="gbtns">
     <button id="bXlsx" class="gb" disabled>⬇ Excel integrado</button>
     <button id="bPptx" class="gb" disabled>⬇ Presentación de resultados</button>
-    <button id="bGeo" class="gb" disabled>⬇ Puntos (GeoJSON)</button>
+    <button id="bKml" class="gb" disabled>⬇ Mapa para Google Earth (KML)</button>
+    <button id="bGeo" class="gb ghost" disabled title="Para QGIS u otros SIG">⬇ GeoJSON (SIG)</button>
   </div>
 </header>
 
 <section id="carga" class="panel">
   <h2>1 · Cargar las entregas</h2>
-  <p>Arrastrá acá los ZIP que exportó cada equipo desde la aplicación, o el ZIP único que da el aula virtual con <b>“Descargar todas las entregas”</b>. Se pueden sumar archivos en varias tandas. Nada sale de esta computadora: los datos se procesan en el navegador.</p>
+  <p>Arrastrá acá los ZIP que exportó cada equipo desde la aplicación, o el ZIP único que da el aula virtual con <b>“Descargar todas las entregas”</b>. Se pueden sumar archivos en varias tandas. Nada sale de esta computadora: los datos se procesan en el navegador y <b>no quedan guardados</b>; al cerrar o recargar la página, o con “Empezar de nuevo”, se borran. Los ZIP originales siguen en el aula virtual.</p>
   <div id="drop" class="drop" tabindex="0">
     <div class="dropin"><b>Soltá los archivos acá</b><br>o <label class="lnk">elegilos<input id="fin" type="file" accept=".zip" multiple hidden></label></div>
   </div>
