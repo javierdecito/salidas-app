@@ -1,7 +1,7 @@
 /* Salidas a la naturaleza · Lago del Fuerte — prototipo sin conexión
    Datos: IndexedDB del teléfono. Exportación: ZIP clasificado (CSV + GeoJSON + fotos por carpeta). */
 'use strict';
-const APP_VERSION = '0.4.2';
+const APP_VERSION = '0.4.3';
 
 // ---------- Contenido de la guía ----------
 const FORMAS = [
@@ -171,7 +171,7 @@ function vInicio() {
     <p>Siempre por el sendero, en fila, mirando el piso. Las manos, nunca donde no se ven. Si ves una serpiente: <b>quieto, avisá y alejate despacio</b>. El celular se usa en las paradas, nunca caminando.</p>
     <button class="btn danger" id="goSeg">Ver fotos y qué hacer</button></div>
   <div class="card note"><h3>Funciona sin señal</h3>
-    <p>Todo lo que cargás queda guardado en este teléfono. Al terminar la salida, en <b>Datos</b>, tocá <b>Exportar</b> y mandale el archivo al docente. Llevá igual la planilla de papel como respaldo.</p>
+    <p>Todo lo que cargás queda guardado en este teléfono. Al terminar la salida, en <b>Datos</b>, tocá <b>Exportar</b> y subí el ZIP a la Tarea del aula virtual. Llevá igual la planilla de papel como respaldo.</p>
     <p class="muted">Versión ${APP_VERSION}</p></div>`;
   $('#sRec').value = rec; $('#sMat').value = sesion.materia || '';
   const fillPar = () => { $('#sPar').innerHTML = '<option value="">Elegí…</option>' + opcionesParada($('#sRec').value).map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join(''); $('#sPar').value = sesion.parada || ''; };
@@ -516,16 +516,19 @@ function etiqueta(r) {
 async function vDatos() {
   const regs = (await allRegs()).sort((a, b) => a.fecha_hora < b.fecha_hora ? 1 : -1);
   const nFotos = regs.reduce((a, r) => a + (r.fotos ? r.fotos.length : 0), 0);
+  let mbFotos = 0; for (const r of regs) for (const fid of (r.fotos || [])) { const f = await getFoto(fid); if (f && f.blob) mbFotos += f.blob.size / 1048576; }
   let est = '';
   try { if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); est = ` · ${(e.usage / 1048576).toFixed(1)} MB usados`; } } catch { }
   $('#view').innerHTML = `<h2>Datos guardados</h2>
     <div class="card"><b>${regs.length}</b> registros · <b>${nFotos}</b> fotos${est}
-      <button class="btn" id="dExp" ${regs.length ? '' : 'disabled'}>📦 Exportar (ZIP clasificado)</button>
-      <p class="muted">El ZIP trae las tablas para Excel, los puntos para QGIS o Google Earth y las fotos ordenadas en carpetas por parada y tipo.</p></div>
+      <p>El ZIP completo pesará unos <b>${(mbFotos + 0.1).toFixed(1)} MB</b>.</p>
+      <button class="btn" id="dExp" ${regs.length ? '' : 'disabled'}>📦 Exportar completo (datos + fotos)</button>
+      <button class="btn" id="dExpL" ${regs.length ? '' : 'disabled'}>📄 Exportar solo datos (liviano, sin fotos)</button>
+      <p class="muted">El ZIP completo trae las tablas para Excel, los puntos para QGIS o Google Earth y las fotos ordenadas por parada y tipo. ${mbFotos > 40 ? '<b>Pesa más de 40 MB: subí al aula virtual el ZIP de solo datos y el completo a la carpeta de respaldo que indique la cátedra.</b>' : 'Si el aula virtual no acepta el completo por tamaño, subí el de solo datos y el completo a la carpeta de respaldo.'}</p></div>
     ${regs.map(r => `<div class="rec"><b>${esc(etiqueta(r))}</b><br>
       <small>Parada ${esc(r.parada)} · ${new Date(r.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · ${r.fotos.length} foto(s) · ${r.lat ? 'GPS ✓' : 'sin GPS'}</small>
       <br><button class="btn small danger" data-del="${r.id}">Borrar</button></div>`).join('')}`;
-  if (regs.length) $('#dExp').onclick = exportar;
+  if (regs.length) { $('#dExp').onclick = () => exportar(true); $('#dExpL').onclick = () => exportar(false); }
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = 'Tocá de nuevo para confirmar'; return; }
     const r = regs.find(x => x.id === b.dataset.del); for (const f of r.fotos) await delFoto(f); await delReg(r.id); toast('Registro borrado'); vDatos();
@@ -535,8 +538,8 @@ async function vDatos() {
 const csvCell = (v) => { const s = String(v ?? ''); return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 function toCSV(rows, cols) { return '﻿' + [cols.join(';')].concat(rows.map(r => cols.map(c => csvCell(c === 'fotos' ? (r._fotosNombres || []).join(' | ') : r[c])).join(';'))).join('\r\n'); }
 
-async function exportar() {
-  const btn = $('#dExp'); btn.disabled = true; btn.textContent = 'Armando el ZIP…';
+async function exportar(conFotos = true) {
+  const btn = $(conFotos ? '#dExp' : '#dExpL'), txt0 = btn.textContent; btn.disabled = true; btn.textContent = 'Armando el ZIP…';
   try {
     const regs = await allRegs();
     const zip = new JSZip();
@@ -545,7 +548,7 @@ async function exportar() {
       for (const fid of r.fotos) {
         const f = await getFoto(fid); if (!f) continue;
         const carpeta = `fotos/parada_${slug(r.parada)}/${r.tipo}`;
-        zip.file(`${carpeta}/${f.nombre}`, f.blob); r._fotosNombres.push(`${carpeta}/${f.nombre}`);
+        if (conFotos) zip.file(`${carpeta}/${f.nombre}`, f.blob); r._fotosNombres.push(`${carpeta}/${f.nombre}`);
       }
     }
     const base = ['id', 'recorrido', 'materia', 'grupo', 'parada', 'fecha_local', 'fecha_hora', 'lat', 'lon', 'precision_m'];
@@ -562,16 +565,16 @@ async function exportar() {
     const gj = { type: 'FeatureCollection', features: regs.filter(r => r.lat !== '' && r.lon !== '').map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
       properties: Object.fromEntries(Object.entries(r).filter(([k]) => !['fotos', '_fotosNombres', '_cruces'].includes(k)).concat([['fotos', (r._fotosNombres || []).join(' | ')]])) })) };
     zip.file('datos/puntos.geojson', JSON.stringify(gj, null, 1));
-    zip.file('LEEME.txt', `Salidas a la naturaleza · Lago del Fuerte\r\nGrupo: ${sesion.grupo}\r\nExportado: ${new Date().toLocaleString('es-AR')}\r\nApp versión ${APP_VERSION}\r\n\r\nTablas para Excel (separador ;):\r\ndatos/comentario_paisaje.csv    -> comentarios del paisaje (observo / deduzco / concluyo)\r\ndatos/manchas_planilla_A.csv    -> lectura de manchas con cuadrante\r\ndatos/transectos_planilla_B.csv -> transectos de renovales por tramo\r\ndatos/senderos_lineas.csv       -> líneas de conteo de senderos (resumen)\r\ndatos/senderos_cruces.csv       -> cada sendero medido (ancho y profundidad)\r\ndatos/registros_rapidos.csv     -> registros rápidos con foto\r\ndatos/puntos.geojson            -> todos los puntos con GPS (QGIS / Google Earth)\r\nfotos/parada_N/tipo/            -> fotos clasificadas; el nombre indica parada, grupo, tipo, qué es y n.º\r\n`);
+    zip.file('LEEME.txt', `Salidas a la naturaleza · Lago del Fuerte\r\nGrupo: ${sesion.grupo}\r\nExportado: ${new Date().toLocaleString('es-AR')}\r\nApp versión ${APP_VERSION}\r\n\r\nTablas para Excel (separador ;):\r\ndatos/comentario_paisaje.csv    -> comentarios del paisaje (observo / deduzco / concluyo)\r\ndatos/manchas_planilla_A.csv    -> lectura de manchas con cuadrante\r\ndatos/transectos_planilla_B.csv -> transectos de renovales por tramo\r\ndatos/senderos_lineas.csv       -> líneas de conteo de senderos (resumen)\r\ndatos/senderos_cruces.csv       -> cada sendero medido (ancho y profundidad)\r\ndatos/registros_rapidos.csv     -> registros rápidos con foto\r\ndatos/puntos.geojson            -> todos los puntos con GPS (QGIS / Google Earth)\r\n${conFotos ? 'fotos/parada_N/tipo/            -> fotos clasificadas; el nombre indica parada, grupo, tipo, qué es y n.º' : 'ESTE ZIP ES SOLO DE DATOS: las fotos están en el ZIP completo (los nombres figuran en la columna fotos).'}\r\n`);
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    const nombre = `salida_lago_del_fuerte_G${slug(sesion.grupo)}_${new Date().toISOString().slice(0, 10)}.zip`;
+    const nombre = `salida_lago_del_fuerte_G${slug(sesion.grupo)}_${new Date().toISOString().slice(0, 10)}${conFotos ? '' : '_solo_datos'}.zip`;
     const file = new File([blob], nombre, { type: 'application/zip' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: nombre }); toast('Listo para enviar'); }
       catch { descargar(blob, nombre); }
     } else descargar(blob, nombre);
   } catch (e) { toast('No se pudo exportar: ' + e.message); }
-  btn.disabled = false; btn.textContent = '📦 Exportar (ZIP clasificado)';
+  btn.disabled = false; btn.textContent = txt0;
 }
 function descargar(blob, nombre) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); toast('ZIP descargado'); }
 
