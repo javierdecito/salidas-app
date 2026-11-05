@@ -1,7 +1,7 @@
 /* Salidas a la naturaleza · Lago del Fuerte — prototipo sin conexión
    Datos: IndexedDB del teléfono. Exportación: ZIP clasificado (CSV + GeoJSON + fotos por carpeta). */
 'use strict';
-const APP_VERSION = '0.4.5';
+const APP_VERSION = '0.5.0';
 
 // ---------- Contenido de la guía ----------
 const FORMAS = [
@@ -35,6 +35,8 @@ const COBERTURA = ['+', '1', '2', '3', '4', '5'];
 const COB_PCT = { '+': 'menos del 1 %', '1': '1 a 10 %', '2': '10 a 25 %', '3': '25 a 50 %', '4': '50 a 75 %', '5': '75 a 100 %' };
 const REC_LADERA = 'Ladera del Puñón (recorrido de la salida)';
 const REC_ALT = 'Recorrido 1 · Fundidor → cruz del cerro (alternativo)';
+const REC_PRACTICA = 'PRÁCTICA · Sendero Pampa (campus)';
+const esPractica = (rec) => /PR[AÁ]CTICA/i.test(String(rec || ''));
 const MATERIAS = ['Fundamentos de Biología', 'Marcos Naturales', 'Equipo mixto'];
 const PARADAS = [
   { id: 'P0', nombre: 'Puñón Mapuche', min: 15, ev: 'Evidencia 1 · La primera impresión', todos: 'Seguridad: las seis reglas y las fotos de las yararás (pestaña Guía → Seguridad). Comentario del paisaje exprés mirando la ladera: una observación de relieve, una de vegetación y una de elementos humanos, cada una con su deducción. Foto panorámica.', bio: '¿Cuántas fisonomías ves? ¿Dónde están las manchas de árboles?', mn: '¿Lo que ves coincide con lo que dedujeron en la charla previa con la imagen satelital?' },
@@ -42,6 +44,11 @@ const PARADAS = [
   { id: 'P2', nombre: 'Bosquete y arbustal del borde norte', min: 30, ev: 'Evidencia 3 · ¿Los árboles se escapan?', todos: 'Juntos (5 min): ¿qué árboles son? ¿Plantados en hileras o escapados? Después, en paralelo (20 min), solo en las franjas que revisó el docente. Al final, 5 min para contarse los resultados.', bio: 'Transecto de renovales de 25 m desde el borde del bosquete o de un matorral de retama, retamilla o zarzamora (el gráfico se dibuja solo).', mn: 'Cuadrante de 1 × 1 m en el arbustal (lectura de mancha) y registro de presiones con foto y GPS.' },
   { id: 'P3', nombre: 'Roquedal y senderos', min: 25, ev: 'Evidencia 4 · La roca y las huellas del uso', todos: 'Al pasar, el árbol aislado: ¿misma especie que el bosquete? ¿tiene renovales? En el roquedal no se trepa ni se meten las manos: ahí toman sol las yararás.', bio: 'Cacería de adaptaciones mirando desde el sendero: cactus, rosetas, helechos, musgos, líquenes. Cara al sol y cara a la sombra.', mn: 'Línea de senderos de 25 m: contá los que cruzan y medí ancho y profundidad. Señales de erosión y de quién los usa.' },
   { id: 'P4', nombre: 'Mirador del borde este', min: 20, ev: 'Evidencia 5 · El titular', todos: 'Comentario final del paisaje (10 min), mirando al lago y la ciudad. Después, el titular de cada equipo en un minuto: "La ladera ___ porque encontramos ___".', bio: 'Conteo de aves de 5 minutos mientras los demás hacen el comentario.', mn: '¿Qué altura marca el GPS? ¿Coincide con la cota de la zona protegida (200 o 220 m)? ¿A qué distancia están las casas?' },
+];
+const PARADAS_PRACTICA = [
+  { id: 'S1', nombre: 'Inicio del sendero', min: 8, ev: 'Práctica 1 · Mirar y anotar', todos: 'Comentario del paisaje exprés (Relevar → Comentario del paisaje): una observación de relieve, una de vegetación y una de elementos humanos, cada una con su deducción. Una foto.', bio: 'Registrá con foto dos formas de vida distintas (Relevar → Registro rápido → Forma de vida). Si dudás, usá la clave de la Guía.', mn: 'Registrá con foto y GPS una presión humana que veas desde acá (Relevar → Registro rápido → Presión).' },
+  { id: 'S2', nombre: 'Mancha junto al sendero', min: 10, ev: 'Práctica 2 · Medir', todos: 'El docente indica una mancha de vegetación a pocos pasos del sendero. Solo se sale del sendero donde él diga.', bio: 'Transecto corto: solo los dos primeros tramos (0–5 y 5–10 m) desde el borde de la mancha; contá plántulas y juveniles. Mirá cómo se dibuja el gráfico.', mn: 'Cuadrante de 1 × 1 m (Relevar → Mancha): fisonomía, dominante, cobertura y suelo desnudo.' },
+  { id: 'S3', nombre: 'Senderos y exportación', min: 7, ev: 'Práctica 3 · Exportar', todos: 'Línea de senderos de 10 m a lo ancho del terreno (Relevar → Senderos). Al final, en Datos: exportar el ZIP y subirlo a la Tarea de práctica.', bio: 'Un indicio de fauna o un invertebrado con foto (Registro rápido), sin tocar nada.', mn: 'Ancho y profundidad de cada sendero que cruza la línea, con la caña y la regla.' },
 ];
 const PELIGROSOS = [
   { img: 'img/s_yarara_grande.jpg', nombre: 'Yarará grande o víbora de la cruz', sci: 'Bothrops alternatus', txt: 'Puede pasar 1,5 m. Dibujos oscuros en forma de riñón bordeados de blanco; líneas blancas en forma de cruz en la cabeza. Es la serpiente más registrada alrededor de Tandil.', cr: 'RAP · iNaturalist · CC BY' },
@@ -104,11 +111,11 @@ async function pedirPersistencia() { try { if (navigator.storage && navigator.st
 
 // ---------- Sesión ----------
 let sesion = store.get('sesion', { recorrido: '', grupo: '', parada: '', materia: '' });
-const paradaInfo = () => sesion.recorrido === REC_LADERA ? PARADAS.find(p => p.id === sesion.parada) : null;
+const paradaInfo = () => sesion.recorrido === REC_LADERA ? PARADAS.find(p => p.id === sesion.parada) : esPractica(sesion.recorrido) ? PARADAS_PRACTICA.find(p => p.id === sesion.parada) : null;
 function sesionOK() { return sesion.recorrido && sesion.grupo && sesion.parada; }
 function renderSessionBar() {
   $('#sessionBar').innerHTML = sesionOK()
-    ? `${sesion.recorrido === REC_LADERA ? '<b>Ladera del Puñón</b>' : '<b>' + esc(sesion.recorrido) + '</b>'} · Grupo <b>${esc(sesion.grupo)}</b> · Parada <b>${esc(sesion.parada)}</b>${paradaInfo() ? ' · ' + esc(paradaInfo().nombre) : ''}`
+    ? `${sesion.recorrido === REC_LADERA ? '<b>Ladera del Puñón</b>' : esPractica(sesion.recorrido) ? '<b class="badge-prac">PRÁCTICA</b> <b>Sendero Pampa</b>' : '<b>' + esc(sesion.recorrido) + '</b>'} · Grupo <b>${esc(sesion.grupo)}</b> · Parada <b>${esc(sesion.parada)}</b>${paradaInfo() ? ' · ' + esc(paradaInfo().nombre) : ''}`
     : 'Configurá el recorrido, el grupo y la parada en <b>Inicio</b>.';
 }
 
@@ -139,7 +146,7 @@ function go(t) { tab = t; document.querySelectorAll('.tab').forEach(b => b.class
 function render() { renderSessionBar(); ({ inicio: vInicio, guia: vGuia, relevar: vRelevar, datos: vDatos }[tab])(); }
 
 function opcionesParada(rec) {
-  return rec === REC_LADERA ? PARADAS.map(p => [p.id, p.id + ' · ' + p.nombre]) : [1, 2, 3, 4, 5, 6, 7].map(n => [String(n), String(n)]);
+  return rec === REC_LADERA ? PARADAS.map(p => [p.id, p.id + ' · ' + p.nombre]) : esPractica(rec) ? PARADAS_PRACTICA.map(p => [p.id, p.id + ' · ' + p.nombre]) : [1, 2, 3, 4, 5, 6, 7].map(n => [String(n), String(n)]);
 }
 function misionHTML() {
   const p = paradaInfo(); if (!p) return '';
@@ -149,14 +156,33 @@ function misionHTML() {
   return `<div class="card mision"><div class="step">${esc(p.id)} · ${esc(p.nombre)} · ${p.min} min</div><h2>${esc(p.ev)}</h2>
     <p>${esc(p.todos)}</p>${m === MATERIAS[0] ? bio : m === MATERIAS[1] ? mn : bio + mn}</div>`;
 }
+// ---------- Instalación ----------
+let promptInstalar = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); promptInstalar = e; if (tab === 'inicio') vInicio(); });
+window.addEventListener('appinstalled', () => { promptInstalar = null; toast('Aplicación instalada: buscá el ícono “Salidas”'); if (tab === 'inicio') vInicio(); });
+const instalada = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+function instalarHTML() {
+  if (instalada()) return '';
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return `<div class="card install"><h3>📲 Instalala en este celular</h3>
+    <p>Así queda un ícono en la pantalla y funciona <b>sin señal</b>. Ahora la estás viendo en el navegador.</p>
+    ${promptInstalar ? '<button class="btn" id="bInst">📲 Instalar en este celular</button>' : ios
+      ? '<p><b>iPhone:</b> abrila en <b>Safari</b> → botón Compartir (cuadrado con flecha) → <b>“Agregar a inicio”</b>.</p>'
+      : '<p><b>Android:</b> si la abriste desde el lector del QR, tocá <b>⋮ → “Abrir en Chrome”</b>. Ya en Chrome: <b>⋮ → “Instalar aplicación”</b> (o “Agregar a la pantalla principal”).</p>'}
+    <p class="muted">Después abrila una vez desde el ícono, con internet, y probá en modo avión.</p></div>`;
+}
+function conectarInstalar() { const b = $('#bInst'); if (b) b.onclick = async () => { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch { } promptInstalar = null; vInicio(); }; }
 function vInicio() {
   const rec = sesion.recorrido || REC_LADERA;
+  const prac = esPractica(rec);
   $('#view').innerHTML = `
+  ${instalarHTML()}
+  ${prac ? `<div class="card prac"><h3>Modo PRÁCTICA</h3><p>Lo que cargues queda marcado como <b>práctica</b>: el ZIP sale con el nombre PRACTICA y la página de gabinete lo separa de la salida real. Al terminar la práctica, exportá y después borrá los datos de la aplicación (pestaña Datos).</p></div>` : ''}
   ${misionHTML()}
   <div class="card">
     <h2>Antes de empezar</h2>
     <label for="sRec">Recorrido</label>
-    <select id="sRec"><option>${REC_LADERA}</option><option>${REC_ALT}</option></select>
+    <select id="sRec"><option>${REC_LADERA}</option><option>${REC_PRACTICA}</option><option>${REC_ALT}</option></select>
     <label for="sMat">Materia</label>
     <select id="sMat"><option value="">Elegí…</option>${MATERIAS.map(m => `<option>${m}</option>`).join('')}</select>
     <label for="sGru">Nombre o número del equipo</label>
@@ -165,9 +191,9 @@ function vInicio() {
     <select id="sPar"></select>
     <button class="btn" id="sSave">Guardar</button>
   </div>
-  <div class="card note"><h3>El caso de la ladera del Puñón</h3>
-    <p>¿Qué le está pasando a esta ladera, por qué, y qué convendría hacer? En cada una de las cinco paradas tu equipo junta una evidencia. En el mirador (P4), cada equipo da su titular. La salida dura 2 h 15 min.</p></div>
-  <div class="card alert"><h3>⚠ En esta ladera suelen aparecer yararás</h3>
+  ${prac ? '' : `<div class="card note"><h3>El caso de la ladera del Puñón</h3>
+    <p>¿Qué le está pasando a esta ladera, por qué, y qué convendría hacer? En cada una de las cinco paradas tu equipo junta una evidencia. En el mirador (P4), cada equipo da su titular. La salida dura 2 h 15 min.</p></div>`}
+  <div class="card alert"><h3>⚠ ${prac ? 'En los pastizales de Tandil pueden aparecer yararás' : 'En esta ladera suelen aparecer yararás'}</h3>
     <p>Siempre por el sendero, en fila, mirando el piso. Las manos, nunca donde no se ven. Si ves una serpiente: <b>quieto, avisá y alejate despacio</b>. El celular se usa en las paradas, nunca caminando.</p>
     <button class="btn danger" id="goSeg">Ver fotos y qué hacer</button></div>
   <div class="card note"><h3>Funciona sin señal</h3>
@@ -177,6 +203,7 @@ function vInicio() {
   const fillPar = () => { $('#sPar').innerHTML = '<option value="">Elegí…</option>' + opcionesParada($('#sRec').value).map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join(''); $('#sPar').value = sesion.parada || ''; };
   fillPar(); $('#sRec').onchange = fillPar;
   $('#goSeg').onclick = () => { guiaSub = 'seg'; go('guia'); };
+  conectarInstalar();
   $('#sSave').onclick = () => {
     sesion = { recorrido: $('#sRec').value, materia: $('#sMat').value, grupo: $('#sGru').value.trim(), parada: $('#sPar').value };
     store.set('sesion', sesion); renderSessionBar();
@@ -525,6 +552,7 @@ async function vDatos() {
       <button class="btn" id="dExp" ${regs.length ? '' : 'disabled'}>📦 Exportar completo (datos + fotos)</button>
       <button class="btn" id="dExpL" ${regs.length ? '' : 'disabled'}>📄 Exportar solo datos (liviano, sin fotos)</button>
       <p class="muted">El ZIP completo trae las tablas para Excel, los puntos para Google Earth y las fotos ordenadas por parada y tipo. ${mbFotos > 40 ? '<b>Pesa más de 40 MB: subí al aula virtual el ZIP de solo datos y el completo a la carpeta de respaldo que indique la cátedra.</b>' : 'Si el aula virtual no acepta el completo por tamaño, subí el de solo datos y el completo a la carpeta de respaldo.'}</p></div>
+    ${regs.some(r => esPractica(r.recorrido)) ? `<div class="card prac"><b>${regs.filter(r => esPractica(r.recorrido)).length} de ${regs.length} registros son de PRÁCTICA.</b> Antes de la salida real, exportalos si hace falta y borralos.</div>` : ''}
     ${regs.length ? `<div class="card"><b>¿Eran datos de prueba?</b><p class="muted">Antes de la salida, borrá lo que cargaste para practicar, así no se mezcla con los datos del campo. Exportá primero si querés guardar algo.</p><p><b>Solo borra lo cargado en esta aplicación</b> (sus registros y las fotos guardadas en ella). No toca la galería, tus fotos, tus archivos ni nada más del celular.</p><button class="btn danger" id="dBorrarTodo">🗑 Borrar los datos de esta aplicación</button></div>` : ''}
     ${regs.map(r => `<div class="rec"><b>${esc(etiqueta(r))}</b><br>
       <small>Parada ${esc(r.parada)} · ${new Date(r.fecha_hora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · ${r.fotos.length} foto(s) · ${r.lat ? 'GPS ✓' : 'sin GPS'}</small>
@@ -594,7 +622,9 @@ async function exportar(conFotos = true) {
     zip.file('datos/puntos_google_earth.kml', kmlDe(porTipo, 'Salida Lago del Fuerte · equipo ' + sesion.grupo));
     zip.file('LEEME.txt', `Salidas a la naturaleza · Lago del Fuerte\r\nGrupo: ${sesion.grupo}\r\nExportado: ${new Date().toLocaleString('es-AR')}\r\nApp versión ${APP_VERSION}\r\n\r\nTablas para Excel (separador ;):\r\ndatos/comentario_paisaje.csv    -> comentarios del paisaje (observo / deduzco / concluyo)\r\ndatos/manchas_planilla_A.csv    -> lectura de manchas con cuadrante\r\ndatos/transectos_planilla_B.csv -> transectos de renovales por tramo\r\ndatos/senderos_lineas.csv       -> líneas de conteo de senderos (resumen)\r\ndatos/senderos_cruces.csv       -> cada sendero medido (ancho y profundidad)\r\ndatos/registros_rapidos.csv     -> registros rápidos con foto\r\ndatos/puntos_google_earth.kml   -> todos los puntos con GPS para abrir en Google Earth (doble clic)\r\ndatos/puntos.geojson            -> los mismos puntos para QGIS u otro SIG\r\n${conFotos ? 'fotos/parada_N/tipo/            -> fotos clasificadas; el nombre indica parada, grupo, tipo, qué es y n.º' : 'ESTE ZIP ES SOLO DE DATOS: las fotos están en el ZIP completo (los nombres figuran en la columna fotos).'}\r\n`);
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    const nombre = `salida_lago_del_fuerte_G${slug(sesion.grupo)}_${new Date().toISOString().slice(0, 10)}${conFotos ? '' : '_solo_datos'}.zip`;
+    const todosPrac = regs.length && regs.every(r => esPractica(r.recorrido)), algunosPrac = regs.some(r => esPractica(r.recorrido));
+    const nombre = `${todosPrac ? 'PRACTICA_sendero_pampa' : 'salida_lago_del_fuerte'}_G${slug(sesion.grupo)}_${new Date().toISOString().slice(0, 10)}${conFotos ? '' : '_solo_datos'}.zip`;
+    if (algunosPrac && !todosPrac) toast('Ojo: hay datos de práctica mezclados; el gabinete los separa solo');
     const file = new File([blob], nombre, { type: 'application/zip' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: nombre }); toast('Listo para enviar'); }

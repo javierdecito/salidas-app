@@ -99,3 +99,7 @@ body.sun .bar i{background:#000}
 .sgrid + .card.alert + h3 + .sgrid .sf{border-color:var(--mid)}
 img.mapa{width:100%;border-radius:10px;border:1px solid var(--line)}
 .card.alert ol{margin:.3em 0 .2em 1.2em;padding:0}
+
+.card.prac{background:#FFF6D6;border-left:5px solid #C9A227}
+.card.install{background:#E8F4FB;border-left:5px solid #4A90B8}
+.badge-prac{background:#C9A227;color:#fff;padding:1px 6px;border-radius:6px;font-size:.85em}

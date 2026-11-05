@@ -13,6 +13,12 @@ const PARADAS = [['P0', 'Puñón Mapuche', -37.349528, -59.127389], ['P1', 'Arro
 // ---------- estado ----------
 const TABLAS = { comentario: 'comentario_paisaje.csv', mancha: 'manchas_planilla_A.csv', transecto: 'transectos_planilla_B.csv', sendero: 'senderos_lineas.csv', cruce: 'senderos_cruces.csv', rapido: 'registros_rapidos.csv' };
 let D = vacio();
+// Qué recorrido se analiza: 'real' (salida, sin prácticas), 'practica' (solo prácticas) o 'todo'
+let FILTRO = 'real';
+const CARGADOS = [];
+const esPractica = (rec) => /PR[AÁ]CTICA/i.test(String(rec || ''));
+const pasaFiltro = (r) => FILTRO === 'todo' ? true : FILTRO === 'practica' ? esPractica(r.recorrido) : !esPractica(r.recorrido);
+const FILTRO_LBL = { real: 'Salida real (sin prácticas)', practica: 'Solo la práctica (Sendero Pampa)', todo: 'Todos los recorridos juntos' };
 function vacio() { return { comentario: [], mancha: [], transecto: [], sendero: [], cruce: [], rapido: [], fotos: [], equipos: new Set(), archivos: 0, ids: new Set() }; }
 const charts = [];
 
@@ -40,7 +46,8 @@ function contar(arr, key) { const m = {}; arr.forEach(r => String(r[key] || '').
 
 // ---------- carga ----------
 function log(msg, cls = '') { const el = $('#log'); el.innerHTML = `<div class="${cls}">${esc(msg)}</div>` + el.innerHTML; }
-async function cargarArchivos(files) {
+async function cargarArchivos(files, guardar = true) {
+  if (guardar) CARGADOS.push(...files);
   for (const f of files) {
     try { await abrirZip(await JSZip.loadAsync(f), f.name, 0); }
     catch (e) { log(`No se pudo leer ${f.name}: ${e.message}`, 'err'); }
@@ -64,12 +71,15 @@ async function abrirZip(zip, nombre, nivel) {
   if (!esExport && nivel === 0 && !nombres.some(n => /\.zip$/i.test(n))) log(`${nombre}: no parece una exportación de la aplicación.`, 'err');
 }
 async function leerExport(zip, pre, nombre) {
-  let nuevos = 0, rep = 0;
+  let nuevos = 0, rep = 0, fuera = 0;
+  const idsOK = new Set(), fotosOK = new Set(); let conLista = false;
   for (const [k, fn] of Object.entries(TABLAS)) {
     let f = zip.file(pre + 'datos/' + fn);
     if (!f && k === 'mancha') f = zip.file(pre + 'datos/A_comentario_paisaje_y_manchas.csv'); // versiones 0.1–0.2
     if (!f) continue;
-    const filas = parseCSV(await f.async('string'));
+    let filas = parseCSV(await f.async('string'));
+    if (k === 'cruce') filas = filas.filter(r => idsOK.has(r.id));
+    else filas = filas.filter(r => { if (pasaFiltro(r)) { idsOK.add(r.id); if ('fotos' in r) { conLista = true; String(r.fotos || '').split('|').map(x => x.trim()).filter(Boolean).forEach(x => fotosOK.add(x)); } return true; } fuera++; return false; });
     for (const r of filas) {
       const clave = k + '|' + r.id + (k === 'cruce' ? '|' + r.sendero_n : '');
       if (D.ids.has(clave)) { rep++; continue; }
@@ -77,7 +87,7 @@ async function leerExport(zip, pre, nombre) {
       if (r.grupo) D.equipos.add(r.grupo);
     }
   }
-  const fotos = Object.keys(zip.files).filter(n => n.startsWith(pre + 'fotos/') && /\.jpe?g$/i.test(n));
+  const fotos = Object.keys(zip.files).filter(n => n.startsWith(pre + 'fotos/') && /\.jpe?g$/i.test(n)).filter(n => idsOK.size && (!conLista || fotosOK.has(n.slice(pre.length))));
   for (const n of fotos) {
     const rel = n.slice(pre.length);
     if (D.fotos.some(x => x.path === rel)) continue;
@@ -86,7 +96,7 @@ async function leerExport(zip, pre, nombre) {
     D.fotos.push({ path: rel, parada: (partes[1] || '').replace('parada_', '').toUpperCase(), tipo: partes[2] || '', blob, url: URL.createObjectURL(blob) });
   }
   D.archivos++;
-  log(`✓ ${nombre}: ${nuevos} filas nuevas${rep ? `, ${rep} repetidas ignoradas` : ''}, ${fotos.length} fotos.`, 'ok');
+  log(`✓ ${nombre}: ${nuevos} filas nuevas${rep ? `, ${rep} repetidas ignoradas` : ''}${fuera ? `, ${fuera} de otro recorrido dejadas aparte (${FILTRO === 'practica' ? 'no son de práctica' : 'son de práctica'})` : ''}, ${fotos.length} fotos.`, fuera && !nuevos ? '' : 'ok');
 }
 
 // ---------- vistas ----------
@@ -174,7 +184,7 @@ function A_fauna() {
 
 function vResumen() {
   const a = A_resumen();
-  $('#vista').innerHTML = `<h2>Resumen de lo cargado</h2>
+  $('#vista').innerHTML = `<h2>Resumen de lo cargado</h2><p class="leg"><b>Recorrido analizado:</b> ${esc(FILTRO_LBL[FILTRO])}</p>
   <div class="kpis"><div class="kpi"><b>${D.equipos.size}</b><span>equipos</span></div>${a.porTipo.map(([t, n]) => `<div class="kpi"><b>${n}</b><span>${t}</span></div>`).join('')}<div class="kpi"><b>${D.fotos.length}</b><span>fotos</span></div></div>
   <h3>Por equipo</h3>${tabla(a.eq, ['equipo', 'materia', 'comentarios', 'manchas', 'transectos', 'senderos', 'rapidos', 'fotos'], ['Equipo', 'Materia', 'Comentarios', 'Manchas', 'Transectos', 'Senderos', 'Registros rápidos', 'Fotos'])}
   <div class="lectura"><b>Antes de interpretar:</b> revisar que todos los equipos estén y que ninguno tenga planillas vacías. Si un equipo entregó dos veces, las filas repetidas se descartan solas.</div>`;
@@ -186,8 +196,9 @@ function vMapa() {
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
   const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagen © Esri' }).addTo(map);
   L.control.layers({ 'Satélite': sat, 'Calles': osm }).addTo(map);
-  L.polygon(ZONA, { color: '#ff3b30', weight: 3, fill: false }).addTo(map);
-  PARADAS.forEach(([c, n, la, lo]) => L.marker([la, lo], { icon: L.divIcon({ className: '', html: `<div style="background:${COL.dark};color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;line-height:22px;text-align:center;font-weight:700;font-size:12px">${c.slice(1)}</div>` }) }).bindPopup(`${c} · ${n}`).addTo(map));
+  const enLadera = FILTRO !== 'practica';
+  if (enLadera) L.polygon(ZONA, { color: '#ff3b30', weight: 3, fill: false }).addTo(map);
+  if (enLadera) PARADAS.forEach(([c, n, la, lo]) => L.marker([la, lo], { icon: L.divIcon({ className: '', html: `<div style="background:${COL.dark};color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;line-height:22px;text-align:center;font-weight:700;font-size:12px">${c.slice(1)}</div>` }) }).bindPopup(`${c} · ${n}`).addTo(map));
   const tipos = { comentario: ['Comentario del paisaje', COL.gold], mancha: ['Mancha', COL.mid], transecto: ['Transecto', COL.dark], sendero: ['Senderos', COL.brown], rapido: ['Registro rápido', COL.blue] };
   const pts = [];
   for (const [k, [nom, col]] of Object.entries(tipos)) D[k].forEach(r => {
@@ -195,7 +206,7 @@ function vMapa() {
     pts.push([la, lo]);
     L.circleMarker([la, lo], { radius: 7, color: '#fff', weight: 1.5, fillColor: col, fillOpacity: .9 }).bindPopup(`<b>${esc(nom)}</b><br>Equipo ${esc(r.grupo)} · ${esc(r.parada)}<br>${esc(r.que_es || r.fisonomia || r.especie || r.sector || '')}`).addTo(map);
   });
-  if (pts.length) map.fitBounds(L.latLngBounds(pts.concat(ZONA)).pad(0.1));
+  if (pts.length) map.fitBounds(L.latLngBounds(enLadera ? pts.concat(ZONA) : pts).pad(0.1));
   $('#mleg').innerHTML = Object.values(tipos).map(([n, c]) => `<span class="dot" style="background:${c}"></span>${n}`).join('');
 }
 function vArboles() {
@@ -274,7 +285,7 @@ function exportarXlsx() {
   hojas.forEach(([k, n]) => { if (D[k].length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(D[k]), n); });
   const t = A_transectos();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(TRAMO_LBL.map((l, i) => ({ tramo: l, plantulas_promedio: t.pl[i], juveniles_promedio: t.ju[i], desvio_total: t.sdT[i] }))), 'Análisis transectos');
-  XLSX.writeFile(wb, `salida_ladera_punon_datos_integrados_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `${FILTRO === 'practica' ? 'PRACTICA_' : FILTRO === 'todo' ? 'TODO_' : ''}salida_ladera_punon_datos_integrados_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 function exportarGeo() {
   const feats = [];
@@ -304,8 +315,8 @@ function kmlDe(filas, titulo) {
   return out.join('\n');
 }
 function exportarKml() {
-  const blob = new Blob([kmlDe(D, 'Salida ladera del Puñón · puntos de todos los equipos')], { type: 'application/vnd.google-earth.kml+xml' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'salida_ladera_punon_puntos_google_earth.kml'; a.click();
+  const blob = new Blob([kmlDe(D, (FILTRO === 'practica' ? 'PRÁCTICA Sendero Pampa' : 'Salida ladera del Puñón') + ' · puntos de todos los equipos')], { type: 'application/vnd.google-earth.kml+xml' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (FILTRO === 'practica' ? 'PRACTICA_' : '') + 'salida_ladera_punon_puntos_google_earth.kml'; a.click();
 }
 async function blobToDataURL(blob) { return new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); }); }
 async function exportarPptx() {
@@ -321,9 +332,9 @@ async function exportarPptx() {
     let s = p.addSlide(); s.background = { color: 'F4F6F3' };
     s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.35, h: 7.5, fill: { color: '1A4331' } });
     s.addText('SALIDAS A LA NATURALEZA · RESULTADOS', { x: 0.9, y: 1.1, w: 11, h: 0.4, fontFace: F, fontSize: 14, bold: true, color: '2F9468', charSpacing: 3 });
-    s.addText('El caso de la ladera del Puñón', { x: 0.9, y: 1.6, w: 11.5, h: 1, fontFace: H, fontSize: 40, bold: true, color: '1A4331' });
+    s.addText(FILTRO === 'practica' ? 'PRÁCTICA · Sendero Pampa' : 'El caso de la ladera del Puñón', { x: 0.9, y: 1.6, w: 11.5, h: 1, fontFace: H, fontSize: 40, bold: true, color: '1A4331' });
     s.addText('¿Qué le está pasando a esta ladera, por qué, y qué convendría hacer?', { x: 0.9, y: 2.65, w: 11.5, h: 0.6, fontFace: F, fontSize: 20, italic: true, color: '14261F' });
-    s.addText(`Datos de ${D.equipos.size} equipos · ${D.fotos.length} fotos · procesado el ${new Date().toLocaleDateString('es-AR')}`, { x: 0.9, y: 3.4, w: 11.5, h: 0.4, fontFace: F, fontSize: 14, color: '5B6B62' });
+    s.addText(`${FILTRO_LBL[FILTRO]} · datos de ${D.equipos.size} equipos · ${D.fotos.length} fotos · procesado el ${new Date().toLocaleDateString('es-AR')}`, { x: 0.9, y: 3.4, w: 11.5, h: 0.4, fontFace: F, fontSize: 14, color: '5B6B62' });
     s.addText('Fundamentos de Biología · Marcos Naturales y Problemáticas Ambientales de la Argentina · LDGA · FCH · UNICEN', { x: 0.9, y: 6.5, w: 11.5, h: 0.4, fontFace: F, fontSize: 12, color: '5B6B62' });
     // 2 resumen
     const a = A_resumen(); s = p.addSlide(); tit(s, 'Lo que juntamos', 'Datos tomados por los equipos en la salida');
@@ -398,7 +409,7 @@ async function exportarPptx() {
       { text: 'Recomendación al municipio: ¿forestar y abrir un circuito de bici, o proteger el pastizal serrano? ¿Por qué?', options: { bullet: { code: '25CF' } } },
     ], { x: 0.8, y: 1.6, w: 11.8, h: 4.6, fontFace: F, fontSize: 20, color: '14261F', paraSpaceAfter: 14 });
     lect(s, 'Distinguir siempre lo seguro de lo probable. Un dato de un día no es una tendencia; varios equipos que coinciden dan más confianza que uno solo.');
-    await p.writeFile({ fileName: `Resultados_ladera_del_Punon_${new Date().toISOString().slice(0, 10)}.pptx` });
+    await p.writeFile({ fileName: `${FILTRO === "practica" ? "PRACTICA_" : ""}Resultados_ladera_del_Punon_${new Date().toISOString().slice(0, 10)}.pptx` });
   } catch (e) { alert('No se pudo armar la presentación: ' + e.message); console.error(e); }
   btn.disabled = false; btn.textContent = '⬇ Presentación de resultados';
 }
@@ -413,6 +424,7 @@ $('#bDemo').onclick = async () => {
   try { const r = await fetch('demo/entregas_ejemplo.zip'); if (!r.ok) throw new Error('no se encontró el archivo de ejemplo'); await cargarArchivos([new File([await r.blob()], 'entregas_ejemplo.zip')]); }
   catch (e) { log('Ejemplo: ' + e.message + ' (si abriste la página como archivo local, usá el botón "elegilos" y buscá demo/entregas_ejemplo.zip)', 'err'); }
 };
-$('#bReset').onclick = () => { D.fotos.forEach(f => URL.revokeObjectURL(f.url)); D = vacio(); $('#log').innerHTML = ''; refrescar(); };
+$('#bReset').onclick = () => { D.fotos.forEach(f => URL.revokeObjectURL(f.url)); D = vacio(); CARGADOS.length = 0; $('#log').innerHTML = ''; refrescar(); };
+$('#fRec').onchange = async (e) => { FILTRO = e.target.value; D.fotos.forEach(f => URL.revokeObjectURL(f.url)); D = vacio(); $('#log').innerHTML = ''; log('Recorrido analizado: ' + FILTRO_LBL[FILTRO] + (CARGADOS.length ? '. Volviendo a leer los archivos cargados…' : ''), 'ok'); await cargarArchivos(CARGADOS.slice(), false); };
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { vista = b.dataset.v; render(); });
 $('#bXlsx').onclick = exportarXlsx; $('#bGeo').onclick = exportarGeo; $('#bKml').onclick = exportarKml; $('#bPptx').onclick = exportarPptx;
